@@ -19,6 +19,7 @@ package cpumanager
 import (
 	"fmt"
 	"math"
+	"os/exec"
 	"sync"
 	"time"
 
@@ -57,6 +58,10 @@ type Manager interface {
 	// so that initial CPU affinity settings can be written through to the
 	// container runtime before the first process begins to execute.
 	AddContainer(p *v1.Pod, c *v1.Container, containerID string) error
+
+	// UpdateContainer is called after container start, so use it update
+	// cache allocation for running container
+	UpdateContainer(ontainerID string) error
 
 	// RemoveContainer is called after Kubelet decides to kill or delete a
 	// container. After this call, the CPU manager stops trying to reconcile
@@ -186,6 +191,28 @@ func (m *manager) AddContainer(p *v1.Pod, c *v1.Container, containerID string) e
 	} else {
 		glog.V(5).Infof("[cpumanager] update container resources is skipped due to cpu set is empty")
 	}
+
+	return nil
+}
+
+func (m *manager) UpdateContainer(containerID string) error {
+
+	glog.V(1).Infof("[cpumanager] Contain ID %s", containerID)
+
+	var (
+		cmdOut []byte
+		err error
+	)
+	cmdName := "docker"
+	cmdArgs := []string{"inspect", "--format=\"{{.State.Pid}}\"", containerID}
+	if cmdOut, err = exec.Command(cmdName, cmdArgs...).Output(); err != nil {
+		glog.Errorf("There was an error running docker inspect command: %v", err)
+		return err
+	}
+	processID := string(cmdOut)
+	glog.V(1).Infof("[cpumanager] ProcessID %s", processID)
+
+	// After get processID, do cache allocation action here for this process
 
 	return nil
 }

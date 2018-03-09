@@ -41,6 +41,11 @@ func (m *fakeManager) AddContainer(pod *v1.Pod, container *v1.Container, contain
 	return nil
 }
 
+func (m *fakeManager) UpdateContainer(containerID string) error {
+	glog.Infof("[fake cpumanager] UpdateContainer (container id: %s)", containerID)
+	return nil
+}
+
 func (m *fakeManager) RemoveContainer(containerID string) error {
 	glog.Infof("[fake cpumanager] RemoveContainer (container id: %s)", containerID)
 	return nil
