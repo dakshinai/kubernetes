@@ -132,6 +132,12 @@ func SetDefaults_KubeletConfiguration(obj *KubeletConfiguration) {
 		// Keep the same as default NodeStatusUpdateFrequency
 		obj.CPUManagerReconcilePeriod = metav1.Duration{Duration: 10 * time.Second}
 	}
+	if obj.CPUManagerLLCPolicy == "" {
+		obj.CPUManagerLLCPolicy = "none"
+	}
+	if obj.CPUManagerLLCSharedPercentage == 0 {
+		obj.CPUManagerLLCSharedPercentage = 50
+	}
 	if obj.RuntimeRequestTimeout == zeroDuration {
 		obj.RuntimeRequestTimeout = metav1.Duration{Duration: 2 * time.Minute}
 	}

@@ -281,6 +281,8 @@ func NewContainerManager(mountUtil mount.Interface, cadvisorInterface cadvisor.I
 			machineInfo,
 			cm.GetNodeAllocatableReservation(),
 			nodeConfig.KubeletRootDir,
+			nodeConfig.ExperimentalCPUManagerLLCPolicy,
+			nodeConfig.ExperimentalCPUManagerLLCSharedPercentage,
 		)
 		if err != nil {
 			glog.Errorf("failed to initialize cpu manager: %v", err)

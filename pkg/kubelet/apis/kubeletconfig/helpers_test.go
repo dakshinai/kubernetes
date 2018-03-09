@@ -147,6 +147,8 @@ var (
 		"CPUCFSQuota",
 		"CPUManagerPolicy",
 		"CPUManagerReconcilePeriod.Duration",
+		"CPUManagerLLCPolicy",
+		"CPUManagerLLCSharedPercentage",
 		"CgroupDriver",
 		"CgroupRoot",
 		"CgroupsPerQOS",

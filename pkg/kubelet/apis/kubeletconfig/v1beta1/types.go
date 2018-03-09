@@ -249,6 +249,16 @@ type KubeletConfiguration struct {
 	// Default: "10s"
 	// +optional
 	CPUManagerReconcilePeriod metav1.Duration `json:"cpuManagerReconcilePeriod,omitempty"`
+	// CPUManagerLLCPolicy is the name of the LLC policy to use.
+	// Requires the CPUManager feature gate to be enabled.
+	// Default: "none"
+	// +optional
+	CPUManagerLLCPolicy string `json:"cpuManagerLLCPolicy,omitempty"`
+	// CPUManagerLLCSharedPercentage represents the share of LLC, non-guaranteed containers occupy.
+	// Requires the CPUManager feature gate to be enabled.
+	// Default: "50%"
+	// +optional
+	CPUManagerLLCSharedPercentage int32 `json:"cpuManagerLLCSharedPercentage,omitempty"`
 	// runtimeRequestTimeout is the timeout for all runtime requests except long running
 	// requests - pull, logs, exec and attach.
 	// Default: "2m"
