@@ -160,6 +160,12 @@ type KubeletConfiguration struct {
 	// CPU Manager reconciliation period.
 	// Requires the CPUManager feature gate to be enabled.
 	CPUManagerReconcilePeriod metav1.Duration
+	// CPUManagerLLCPolicy is the name of the LLC policy to use.
+	// Requires the CPUManager feature gate to be enabled.
+	CPUManagerLLCPolicy string
+	// CPUManagerLLCSharedPercentage represents the share of LLC, non-guaranteed containers occupy.
+	// Requires the CPUManager feature gate to be enabled.
+	CPUManagerLLCSharedPercentage int32
 	// runtimeRequestTimeout is the timeout for all runtime requests except long running
 	// requests - pull, logs, exec and attach.
 	RuntimeRequestTimeout metav1.Duration
