@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
+	"k8s.io/kubernetes/pkg/kubelet/cm/cpumanager/resctrl"
 	"k8s.io/kubernetes/pkg/kubelet/cm/cpumanager/state"
 	"k8s.io/kubernetes/pkg/kubelet/cm/cpumanager/topology"
 	"k8s.io/kubernetes/pkg/kubelet/cm/cpuset"
@@ -157,6 +158,16 @@ func NewManager(cpuPolicyName string, reconcilePeriod time.Duration, machineInfo
 }
 
 func (m *manager) Start(activePods ActivePodsFunc, podStatusProvider status.PodStatusProvider, containerRuntime runtimeService) {
+	glog.V(1).Infof("[cpumanager] Create guaranteed and shared Cache COS")
+	res := resctrl.NewResAssociation()
+	resctrl.Commit(res, "guaranteed")
+
+	cacheLevel := "L3"
+	// TODO(lin.yang) Hardcode half LLC cache for shared COS, should improve
+	// it to automatically get L3 cache info
+	res.Schemata[cacheLevel] = []resctrl.CacheCos{resctrl.CacheCos{ID: 0, Mask: "003ff"}, resctrl.CacheCos{ID: 1, Mask: "003ff"}}
+	resctrl.Commit(res, "shared")
+
 	glog.Infof("[cpumanager] starting with %s policy", m.policy.Name())
 	glog.Infof("[cpumanager] reconciling every %v", m.reconcilePeriod)
 
