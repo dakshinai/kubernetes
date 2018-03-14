@@ -62,7 +62,7 @@ type Manager interface {
 
 	// UpdateContainer is called after container start, so use it update
 	// cache allocation for running container
-	UpdateContainer(ontainerID string) error
+	UpdateContainer(p *v1.Pod, ontainerID string) error
 
 	// RemoveContainer is called after Kubelet decides to kill or delete a
 	// container. After this call, the CPU manager stops trying to reconcile
@@ -206,24 +206,25 @@ func (m *manager) AddContainer(p *v1.Pod, c *v1.Container, containerID string) e
 	return nil
 }
 
-func (m *manager) UpdateContainer(containerID string) error {
-
-	glog.V(1).Infof("[cpumanager] Contain ID %s", containerID)
-
+func (m *manager) UpdateContainer(pod *v1.Pod, containerID string) error {
 	var (
 		cmdOut []byte
 		err error
 	)
 	cmdName := "docker"
-	cmdArgs := []string{"inspect", "--format=\"{{.State.Pid}}\"", containerID}
+	cmdArgs := []string{"inspect", "--format={{.State.Pid}}", containerID}
 	if cmdOut, err = exec.Command(cmdName, cmdArgs...).Output(); err != nil {
 		glog.Errorf("There was an error running docker inspect command: %v", err)
 		return err
 	}
 	processID := string(cmdOut)
-	glog.V(1).Infof("[cpumanager] ProcessID %s", processID)
 
 	// After get processID, do cache allocation action here for this process
+	res := resctrl.NewResAssociation()
+	res.Tasks = append(res.Tasks, processID)
+	cacheCOS := getCacheCOS(pod)
+	glog.V(1).Infof("[cpumanager] Add container %s process %s to cache %s COS", containerID, processID, cacheCOS)
+	resctrl.Commit(res, cacheCOS)
 
 	return nil
 }

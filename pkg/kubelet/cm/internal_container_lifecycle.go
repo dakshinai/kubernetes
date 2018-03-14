@@ -26,7 +26,7 @@ import (
 
 type InternalContainerLifecycle interface {
 	PreStartContainer(pod *v1.Pod, container *v1.Container, containerID string) error
-	PostStartContainer(containerID string) error
+	PostStartContainer(pod *v1.Pod, containerID string) error
 	PreStopContainer(containerID string) error
 	PostStopContainer(containerID string) error
 }
@@ -43,9 +43,9 @@ func (i *internalContainerLifecycleImpl) PreStartContainer(pod *v1.Pod, containe
 	return nil
 }
 
-func (i *internalContainerLifecycleImpl) PostStartContainer(containerID string) error {
+func (i *internalContainerLifecycleImpl) PostStartContainer(pod *v1.Pod, containerID string) error {
 	if utilfeature.DefaultFeatureGate.Enabled(kubefeatures.CPUManager) {
-		return i.cpuManager.UpdateContainer(containerID)
+		return i.cpuManager.UpdateContainer(pod, containerID)
 	}
 	return nil
 }

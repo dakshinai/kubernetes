@@ -30,7 +30,7 @@ func (f *fakeInternalContainerLifecycle) PreStartContainer(pod *v1.Pod, containe
 	return nil
 }
 
-func (f *fakeInternalContainerLifecycle) PostStartContainer(containerID string) error {
+func (f *fakeInternalContainerLifecycle) PostStartContainer(pod *v1.Pod, containerID string) error {
 	return nil
 }
 
