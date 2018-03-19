@@ -219,10 +219,15 @@ func (m *manager) UpdateContainer(pod *v1.Pod, containerID string) error {
 	}
 	processID := string(cmdOut)
 
+	cacheCOS := getCacheCOS(pod)
+	// Skip container of k8s system, keep them in root cache COS
+	if cacheCOS == "" {
+		glog.V(1).Infof("[cpumanager] Skip update cache for container %s in namespace %s", containerID, pod.Namespace)
+		return nil
+	}
 	// After get processID, do cache allocation action here for this process
 	res := resctrl.NewResAssociation()
 	res.Tasks = append(res.Tasks, processID)
-	cacheCOS := getCacheCOS(pod)
 	glog.V(1).Infof("[cpumanager] Add container %s process %s to cache %s COS", containerID, processID, cacheCOS)
 	resctrl.Commit(res, cacheCOS)
 
