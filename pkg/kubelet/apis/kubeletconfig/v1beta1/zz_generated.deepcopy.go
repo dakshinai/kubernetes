@@ -193,7 +193,6 @@ func (in *KubeletConfiguration) DeepCopyInto(out *KubeletConfiguration) {
 		}
 	}
 	out.CPUManagerReconcilePeriod = in.CPUManagerReconcilePeriod
-	out.CPUManagerLLCSharedPercentage = in.CPUManagerLLCSharedPercentage
 	out.RuntimeRequestTimeout = in.RuntimeRequestTimeout
 	if in.PodPidsLimit != nil {
 		in, out := &in.PodPidsLimit, &out.PodPidsLimit
