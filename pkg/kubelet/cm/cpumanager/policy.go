@@ -29,4 +29,6 @@ type Policy interface {
 	AddContainer(s state.State, pod *v1.Pod, container *v1.Container, containerID string) error
 	// RemoveContainer call is idempotent
 	RemoveContainer(s state.State, containerID string) error
+	// UpdateContainer call is idempotent
+	UpdateContainer(s state.State, pod *v1.Pod, container *v1.Container, containerID string) error
 }

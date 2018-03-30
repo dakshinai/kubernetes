@@ -36,8 +36,9 @@ import (
 )
 
 type mockState struct {
-	assignments   state.ContainerCPUAssignments
-	defaultCPUSet cpuset.CPUSet
+	assignments    state.ContainerCPUAssignments
+	llcAssignments state.ContainerLLCCacheAssignments
+	defaultCPUSet  cpuset.CPUSet
 }
 
 func (s *mockState) GetCPUSet(containerID string) (cpuset.CPUSet, bool) {
@@ -56,12 +57,21 @@ func (s *mockState) GetCPUSetOrDefault(containerID string) cpuset.CPUSet {
 	return s.GetDefaultCPUSet()
 }
 
+func (s *mockState) GetLLCSchema(containerID string) (string, bool) {
+	res, ok := s.llcAssignments[containerID]
+	return res, ok
+}
+
 func (s *mockState) SetCPUSet(containerID string, cset cpuset.CPUSet) {
 	s.assignments[containerID] = cset
 }
 
 func (s *mockState) SetDefaultCPUSet(cset cpuset.CPUSet) {
 	s.defaultCPUSet = cset
+}
+
+func (s *mockState) SetLLCSchema(containerID string, schema string) {
+	s.llcAssignments[containerID] = schema
 }
 
 func (s *mockState) Delete(containerID string) {
@@ -81,6 +91,14 @@ func (s *mockState) GetCPUAssignments() state.ContainerCPUAssignments {
 	return s.assignments.Clone()
 }
 
+func (s *mockState) SetLLCCacheAssignments(ca state.ContainerLLCCacheAssignments) {
+	s.llcAssignments = ca.Clone()
+}
+
+func (s *mockState) GetLLCCacheAssignments() state.ContainerLLCCacheAssignments {
+	return s.llcAssignments.Clone()
+}
+
 type mockPolicy struct {
 	err error
 }
@@ -97,6 +115,10 @@ func (p *mockPolicy) AddContainer(s state.State, pod *v1.Pod, container *v1.Cont
 }
 
 func (p *mockPolicy) RemoveContainer(s state.State, containerID string) error {
+	return p.err
+}
+
+func (p *mockPolicy) UpdateContainer(s state.State, pod *v1.Pod, container *v1.Container, containerID string) error {
 	return p.err
 }
 
@@ -282,7 +304,8 @@ func TestCPUManagerGenerate(t *testing.T) {
 			}
 			defer os.RemoveAll(sDir)
 
-			mgr, err := NewManager(testCase.cpuPolicyName, 5*time.Second, machineInfo, testCase.nodeAllocatableReservation, sDir)
+			//TODO: Modify to include test case for LLC static policy
+			mgr, err := NewManager(testCase.cpuPolicyName, 5*time.Second, machineInfo, testCase.nodeAllocatableReservation, sDir, "", 50)
 			if testCase.expectedError != nil {
 				if !strings.Contains(err.Error(), testCase.expectedError.Error()) {
 					t.Errorf("Unexpected error message. Have: %s wants %s", err.Error(), testCase.expectedError.Error())

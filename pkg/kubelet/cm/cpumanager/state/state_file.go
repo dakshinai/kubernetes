@@ -30,6 +30,7 @@ type stateFileData struct {
 	PolicyName    string            `json:"policyName"`
 	DefaultCPUSet string            `json:"defaultCpuSet"`
 	Entries       map[string]string `json:"entries,omitempty"`
+	LLCEntries    map[string]string `json:"llcEntries,omitempty"`
 }
 
 var _ State = &stateFile{}
@@ -69,6 +70,7 @@ func (sf *stateFile) tryRestoreState() error {
 
 	// used when all parsing is ok
 	tmpAssignments := make(ContainerCPUAssignments)
+	tmpLLCCacheAssignments := make(ContainerLLCCacheAssignments)
 	tmpDefaultCPUSet := cpuset.NewCPUSet()
 	tmpContainerCPUSet := cpuset.NewCPUSet()
 
@@ -113,8 +115,13 @@ func (sf *stateFile) tryRestoreState() error {
 		tmpAssignments[containerID] = tmpContainerCPUSet
 	}
 
+	for containerID, schema := range readState.LLCEntries {
+		tmpLLCCacheAssignments[containerID] = schema
+	}
+
 	sf.cache.SetDefaultCPUSet(tmpDefaultCPUSet)
 	sf.cache.SetCPUAssignments(tmpAssignments)
+	sf.cache.SetLLCCacheAssignments(tmpLLCCacheAssignments)
 
 	glog.V(2).Infof("[cpumanager] state file: restored state from state file \"%s\"", sf.stateFilePath)
 	glog.V(2).Infof("[cpumanager] state file: defaultCPUSet: %s", tmpDefaultCPUSet.String())
@@ -131,10 +138,15 @@ func (sf *stateFile) storeState() {
 		PolicyName:    sf.policyName,
 		DefaultCPUSet: sf.cache.GetDefaultCPUSet().String(),
 		Entries:       map[string]string{},
+		LLCEntries:    map[string]string{},
 	}
 
 	for containerID, cset := range sf.cache.GetCPUAssignments() {
 		data.Entries[containerID] = cset.String()
+	}
+
+	for containerID, schema := range sf.cache.GetLLCCacheAssignments() {
+		data.Entries[containerID] = schema
 	}
 
 	if content, err = json.Marshal(data); err != nil {
@@ -175,6 +187,20 @@ func (sf *stateFile) GetCPUAssignments() ContainerCPUAssignments {
 	return sf.cache.GetCPUAssignments()
 }
 
+func (sf *stateFile) GetLLCSchema(containerID string) (string, bool) {
+	sf.RLock()
+	defer sf.RUnlock()
+
+	schema, ok := sf.cache.GetLLCSchema(containerID)
+	return schema, ok
+}
+
+func (sf *stateFile) GetLLCCacheAssignments() ContainerLLCCacheAssignments {
+	sf.RLock()
+	defer sf.RUnlock()
+	return sf.cache.GetLLCCacheAssignments()
+}
+
 func (sf *stateFile) SetCPUSet(containerID string, cset cpuset.CPUSet) {
 	sf.Lock()
 	defer sf.Unlock()
@@ -193,6 +219,20 @@ func (sf *stateFile) SetCPUAssignments(a ContainerCPUAssignments) {
 	sf.Lock()
 	defer sf.Unlock()
 	sf.cache.SetCPUAssignments(a)
+	sf.storeState()
+}
+
+func (sf *stateFile) SetLLCSchema(containerID string, schema string) {
+	sf.Lock()
+	defer sf.Unlock()
+	sf.cache.SetLLCSchema(containerID, schema)
+	sf.storeState()
+}
+
+func (sf *stateFile) SetLLCCacheAssignments(ca ContainerLLCCacheAssignments) {
+	sf.Lock()
+	defer sf.Unlock()
+	sf.cache.SetLLCCacheAssignments(ca)
 	sf.storeState()
 }
 

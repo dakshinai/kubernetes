@@ -141,7 +141,7 @@ func (m *kubeGenericRuntimeManager) startContainer(podSandboxID string, podSandb
 		return grpc.ErrorDesc(err), kubecontainer.ErrRunContainer
 	}
 	m.recordContainerEvent(pod, container, containerID, v1.EventTypeNormal, events.StartedContainer, "Started container")
-	err = m.internalLifecycle.PostStartContainer(pod, containerID)
+	err = m.internalLifecycle.PostStartContainer(pod, container, containerID)
 	if err != nil {
 		m.recorder.Eventf(ref, v1.EventTypeWarning, events.FailedToStartContainer, "Internal PostStartContainer hook failed: %v", err)
 		return "Internal PostStartContainer hook failed", err

@@ -42,7 +42,7 @@ type staticPolicyTest struct {
 }
 
 func TestStaticPolicyName(t *testing.T) {
-	policy := NewStaticPolicy(topoSingleSocketHT, 1)
+	policy := NewStaticPolicy(topoSingleSocketHT, 1, 50)
 
 	policyName := policy.Name()
 	if policyName != "static" {
@@ -99,7 +99,7 @@ func TestStaticPolicyStart(t *testing.T) {
 					t.Error("expected panic doesn't occurred")
 				}
 			}()
-			policy := NewStaticPolicy(testCase.topo, testCase.numReservedCPUs).(*staticPolicy)
+			policy := NewStaticPolicy(testCase.topo, testCase.numReservedCPUs, 50).(*staticPolicy)
 			st := &mockState{
 				assignments:   testCase.stAssignments,
 				defaultCPUSet: testCase.stDefaultCPUSet,
@@ -383,7 +383,7 @@ func TestStaticPolicyAdd(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		policy := NewStaticPolicy(testCase.topo, testCase.numReservedCPUs)
+		policy := NewStaticPolicy(testCase.topo, testCase.numReservedCPUs, 50)
 
 		st := &mockState{
 			assignments:   testCase.stAssignments,
@@ -472,7 +472,7 @@ func TestStaticPolicyRemove(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		policy := NewStaticPolicy(testCase.topo, testCase.numReservedCPUs)
+		policy := NewStaticPolicy(testCase.topo, testCase.numReservedCPUs, 50)
 
 		st := &mockState{
 			assignments:   testCase.stAssignments,

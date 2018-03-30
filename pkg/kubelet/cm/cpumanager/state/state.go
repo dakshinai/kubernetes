@@ -23,9 +23,21 @@ import (
 // ContainerCPUAssignments type used in cpu manger state
 type ContainerCPUAssignments map[string]cpuset.CPUSet
 
+// ContainerLLCCacheAssignments type used in cpu manger state
+type ContainerLLCCacheAssignments map[string]string
+
 // Clone returns a copy of ContainerCPUAssignments
 func (as ContainerCPUAssignments) Clone() ContainerCPUAssignments {
 	ret := make(ContainerCPUAssignments)
+	for key, val := range as {
+		ret[key] = val
+	}
+	return ret
+}
+
+// Clone returns a copy of ContainerLLCCacheAssignments
+func (as ContainerLLCCacheAssignments) Clone() ContainerLLCCacheAssignments {
+	ret := make(ContainerLLCCacheAssignments)
 	for key, val := range as {
 		ret[key] = val
 	}
@@ -38,14 +50,18 @@ type Reader interface {
 	GetDefaultCPUSet() cpuset.CPUSet
 	GetCPUSetOrDefault(containerID string) cpuset.CPUSet
 	GetCPUAssignments() ContainerCPUAssignments
+	GetLLCSchema(containerID string) (string, bool)
+	GetLLCCacheAssignments() ContainerLLCCacheAssignments
 }
 
 type writer interface {
 	SetCPUSet(containerID string, cpuset cpuset.CPUSet)
 	SetDefaultCPUSet(cpuset cpuset.CPUSet)
 	SetCPUAssignments(ContainerCPUAssignments)
+	SetLLCCacheAssignments(assignments ContainerLLCCacheAssignments)
 	Delete(containerID string)
 	ClearState()
+	SetLLCSchema(containerID string, schema string)
 }
 
 // State interface provides methods for tracking and setting cpu/pod assignment

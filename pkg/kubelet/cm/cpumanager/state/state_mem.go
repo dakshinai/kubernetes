@@ -25,8 +25,9 @@ import (
 
 type stateMemory struct {
 	sync.RWMutex
-	assignments   ContainerCPUAssignments
-	defaultCPUSet cpuset.CPUSet
+	assignments    ContainerCPUAssignments
+	llcAssignments ContainerLLCCacheAssignments
+	defaultCPUSet  cpuset.CPUSet
 }
 
 var _ State = &stateMemory{}
@@ -35,8 +36,9 @@ var _ State = &stateMemory{}
 func NewMemoryState() State {
 	glog.Infof("[cpumanager] initializing new in-memory state store")
 	return &stateMemory{
-		assignments:   ContainerCPUAssignments{},
-		defaultCPUSet: cpuset.NewCPUSet(),
+		assignments:    ContainerCPUAssignments{},
+		llcAssignments: ContainerLLCCacheAssignments{},
+		defaultCPUSet:  cpuset.NewCPUSet(),
 	}
 }
 
@@ -71,6 +73,20 @@ func (s *stateMemory) GetCPUAssignments() ContainerCPUAssignments {
 	return s.assignments.Clone()
 }
 
+func (s *stateMemory) GetLLCSchema(containerID string) (string, bool) {
+	s.RLock()
+	defer s.RUnlock()
+
+	res, ok := s.llcAssignments[containerID]
+	return res, ok
+}
+
+func (s *stateMemory) GetLLCCacheAssignments() ContainerLLCCacheAssignments {
+	s.RLock()
+	defer s.RUnlock()
+	return s.llcAssignments.Clone()
+}
+
 func (s *stateMemory) SetCPUSet(containerID string, cset cpuset.CPUSet) {
 	s.Lock()
 	defer s.Unlock()
@@ -93,6 +109,22 @@ func (s *stateMemory) SetCPUAssignments(a ContainerCPUAssignments) {
 
 	s.assignments = a.Clone()
 	glog.Infof("[cpumanager] updated cpuset assignments: \"%v\"", a)
+}
+
+func (s *stateMemory) SetLLCSchema(containerID string, schema string) {
+	s.Lock()
+	defer s.Unlock()
+
+	s.llcAssignments[containerID] = schema
+	glog.Infof("[cpumanager] updated desired llc schema (container id: %s, schema: \"%s\")", containerID, schema)
+}
+
+func (s *stateMemory) SetLLCCacheAssignments(ca ContainerLLCCacheAssignments) {
+	s.Lock()
+	defer s.Unlock()
+
+	s.llcAssignments = ca.Clone()
+	glog.Infof("[cpumanager] updated llc cache assignments: \"%v\"", ca)
 }
 
 func (s *stateMemory) Delete(containerID string) {

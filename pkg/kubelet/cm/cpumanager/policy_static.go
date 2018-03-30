@@ -18,10 +18,16 @@ package cpumanager
 
 import (
 	"fmt"
+	"math"
+	"os/exec"
+	"strconv"
+	"strings"
 
 	"github.com/golang/glog"
 	"k8s.io/api/core/v1"
 	v1qos "k8s.io/kubernetes/pkg/apis/core/v1/helper/qos"
+	"k8s.io/kubernetes/pkg/kubelet/cm/cpumanager/resctrl"
+	"k8s.io/kubernetes/pkg/kubelet/cm/cpumanager/resctrl/bitmap"
 	"k8s.io/kubernetes/pkg/kubelet/cm/cpumanager/state"
 	"k8s.io/kubernetes/pkg/kubelet/cm/cpumanager/topology"
 	"k8s.io/kubernetes/pkg/kubelet/cm/cpuset"
@@ -75,6 +81,8 @@ type staticPolicy struct {
 	topology *topology.CPUTopology
 	// set of CPUs that is not available for exclusive assignment
 	reserved cpuset.CPUSet
+	// percentage of LLC to be shared with containers that have burstable or best-effort SLA
+	llcSharedPercentage int32
 }
 
 // Ensure staticPolicy implements Policy interface
@@ -83,7 +91,7 @@ var _ Policy = &staticPolicy{}
 // NewStaticPolicy returns a CPU manager policy that does not change CPU
 // assignments for exclusively pinned guaranteed containers after the main
 // container process starts.
-func NewStaticPolicy(topology *topology.CPUTopology, numReservedCPUs int) Policy {
+func NewStaticPolicy(topology *topology.CPUTopology, numReservedCPUs int, llcSharedPercentage int32) Policy {
 	allCPUs := topology.CPUDetails.CPUs()
 	// takeByTopology allocates CPUs associated with low-numbered cores from
 	// allCPUs.
@@ -99,8 +107,9 @@ func NewStaticPolicy(topology *topology.CPUTopology, numReservedCPUs int) Policy
 	glog.Infof("[cpumanager] reserved %d CPUs (\"%s\") not available for exclusive assignment", reserved.Size(), reserved)
 
 	return &staticPolicy{
-		topology: topology,
-		reserved: reserved,
+		topology:            topology,
+		reserved:            reserved,
+		llcSharedPercentage: llcSharedPercentage,
 	}
 }
 
@@ -113,6 +122,79 @@ func (p *staticPolicy) Start(s state.State) {
 		glog.Errorf("[cpumanager] static policy invalid state: %s\n", err.Error())
 		panic("[cpumanager] - please drain node and remove policy state file")
 	}
+
+	if !resctrl.IsIntelRdtMounted() {
+		glog.Errorf("[cpumanager] resctrl not mounted\n")
+		panic("[cpumanager] - resctrl not mounted")
+	}
+
+	if err := p.validateLLCParams(); err != nil {
+		glog.Errorf("[cpumanager] invalid LLC params: %s\n", err.Error())
+		panic("[cpumanager] - invalid LLC params")
+	}
+
+	if err := p.setupLLC(); err != nil {
+		glog.Errorf("[cpumanager] unable to setup resctrl: %s\n", err.Error())
+		panic("[cpumanager] - unable to setup resctrl")
+	}
+}
+
+func (p *staticPolicy) validateLLCParams() error {
+	if p.llcSharedPercentage < 1 || p.llcSharedPercentage > 100 {
+		return fmt.Errorf("LLC shared Cache CoS should occupy atleast 1 percentage; User provided value=%d", p.llcSharedPercentage)
+	}
+	return nil
+}
+func (p *staticPolicy) setupLLC() error {
+
+	glog.V(1).Infof("[cpumanager] creating 100 percent guaranteed and %v percent shared Cache CoS", p.llcSharedPercentage)
+
+	// Guaranteed CoS defaults to entire LLC
+	res := resctrl.NewResAssociation()
+	err := resctrl.Commit(res, "guaranteed")
+	if err != nil {
+		return fmt.Errorf("commit failed for guaranteed Cache CoS: %s", err.Error())
+	}
+
+	// Get LLC level
+	level := resctrl.GetLLC()
+	cacheLevel := "L" + strconv.FormatUint(uint64(level), 10)
+	rdtCoSInfo := resctrl.GetRdtCosInfo()
+	if rdtCoSInfo[strings.ToLower(cacheLevel)] == nil {
+		return fmt.Errorf("unable to fetch CAT info")
+	}
+
+	// Determine number of cache ways in shared Cache CoS
+	cbmMask := resctrl.GetRdtCosInfo()[strings.ToLower(cacheLevel)].CbmMask
+	maskLen := bitmap.CbmLen(cbmMask)
+	sharedWays := math.Floor(float64(p.llcSharedPercentage) / float64(100) * float64(maskLen))
+	glog.V(1).Infof("[cpumanager] shared ways %f", sharedWays)
+
+	b, err := bitmap.NewBitmap(maskLen, cbmMask)
+	if err != nil {
+		return fmt.Errorf("CAT bitmask generation failed: %s", err.Error())
+	}
+
+	r := b.GetConnectiveBits(uint32(sharedWays), 0, true)
+	glog.V(1).Infof("[cpumanager] shared COS bitmask %s", r.ToString())
+
+	// Determine number of available LLC
+	num, err := resctrl.GetNumberOfCaches(int(level))
+	if err != nil {
+		return fmt.Errorf("unable to fetch CPU cache info: %s", err.Error())
+	}
+
+	res.Schemata[cacheLevel] = make([]resctrl.CacheCos, num)
+	for i := 0; i < num; i++ {
+		res.Schemata[cacheLevel][i] = resctrl.CacheCos{ID: uint8(i), Mask: r.ToString()}
+	}
+
+	err = resctrl.Commit(res, "shared")
+	if err != nil {
+		return fmt.Errorf("commit failed for shared Cache CoS: %s", err.Error())
+	}
+
+	return nil
 }
 
 func (p *staticPolicy) validateState(s state.State) error {
@@ -173,6 +255,42 @@ func (p *staticPolicy) AddContainer(s state.State, pod *v1.Pod, container *v1.Co
 		s.SetCPUSet(containerID, cpuset)
 	}
 	// container belongs in the shared pool (nothing to do; use default cpuset)
+	return nil
+}
+
+func (p *staticPolicy) UpdateContainer(s state.State, pod *v1.Pod, container *v1.Container, containerID string) error {
+	glog.Infof("[cpumanager] static policy: UpdateContainer (pod: %s, container: %s, container id: %s)", pod.Name, container.Name, containerID)
+
+	if _, ok := s.GetLLCSchema(containerID); ok {
+		glog.Infof("[cpumanager] static policy: container already present in state, skipping (container: %s, container id: %s)", container.Name, containerID)
+		return nil
+	}
+	var (
+		cmdOut []byte
+		err    error
+	)
+	cmdName := "docker"
+	cmdArgs := []string{"inspect", "--format={{.State.Pid}}", containerID}
+	if cmdOut, err = exec.Command(cmdName, cmdArgs...).Output(); err != nil {
+		glog.Errorf("There was an error running docker inspect command: %v", err)
+		return err
+	}
+	processID := string(cmdOut)
+
+	cacheCOS := getCacheCOS(pod)
+	// Skip container of k8s system, keep them in root cache COS
+	if cacheCOS == "" {
+		glog.V(1).Infof("[cpumanager] Skip update cache for container %s in namespace %s", containerID, pod.Namespace)
+		return nil
+	}
+	// After get processID, do cache allocation action here for this process
+	res := resctrl.NewResAssociation()
+	res.Tasks = append(res.Tasks, processID)
+	glog.V(1).Infof("[cpumanager] Update container %s process %s to cache %s COS", containerID, processID, cacheCOS)
+	resctrl.Commit(res, cacheCOS)
+
+	s.SetLLCSchema(containerID, cacheCOS)
+
 	return nil
 }
 

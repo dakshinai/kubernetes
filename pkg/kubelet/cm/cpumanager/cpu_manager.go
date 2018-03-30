@@ -19,7 +19,6 @@ package cpumanager
 import (
 	"fmt"
 	"math"
-	"os/exec"
 	"sync"
 	"time"
 
@@ -29,7 +28,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
-	"k8s.io/kubernetes/pkg/kubelet/cm/cpumanager/resctrl"
 	"k8s.io/kubernetes/pkg/kubelet/cm/cpumanager/state"
 	"k8s.io/kubernetes/pkg/kubelet/cm/cpumanager/topology"
 	"k8s.io/kubernetes/pkg/kubelet/cm/cpuset"
@@ -62,7 +60,7 @@ type Manager interface {
 
 	// UpdateContainer is called after container start, so use it update
 	// cache allocation for running container
-	UpdateContainer(p *v1.Pod, ontainerID string) error
+	UpdateContainer(p *v1.Pod, c *v1.Container, containerID string) error
 
 	// RemoveContainer is called after Kubelet decides to kill or delete a
 	// container. After this call, the CPU manager stops trying to reconcile
@@ -99,6 +97,8 @@ type manager struct {
 	machineInfo *cadvisorapi.MachineInfo
 
 	nodeAllocatableReservation v1.ResourceList
+
+	llcSharedPercentage int32
 }
 
 var _ Manager = &manager{}
@@ -136,7 +136,7 @@ func NewManager(cpuPolicyName string, reconcilePeriod time.Duration, machineInfo
 		// exclusively allocated.
 		reservedCPUsFloat := float64(reservedCPUs.MilliValue()) / 1000
 		numReservedCPUs := int(math.Ceil(reservedCPUsFloat))
-		policy = NewStaticPolicy(topo, numReservedCPUs)
+		policy = NewStaticPolicy(topo, numReservedCPUs, llcSharedPercentage)
 
 	default:
 		glog.Errorf("[cpumanager] Unknown policy \"%s\", falling back to default policy \"%s\"", cpuPolicyName, PolicyNone)
@@ -153,21 +153,12 @@ func NewManager(cpuPolicyName string, reconcilePeriod time.Duration, machineInfo
 		state:                      stateImpl,
 		machineInfo:                machineInfo,
 		nodeAllocatableReservation: nodeAllocatableReservation,
+		llcSharedPercentage:        llcSharedPercentage,
 	}
 	return manager, nil
 }
 
 func (m *manager) Start(activePods ActivePodsFunc, podStatusProvider status.PodStatusProvider, containerRuntime runtimeService) {
-	glog.V(1).Infof("[cpumanager] Create guaranteed and shared Cache COS")
-	res := resctrl.NewResAssociation()
-	resctrl.Commit(res, "guaranteed")
-
-	cacheLevel := "L3"
-	// TODO(lin.yang) Hardcode half LLC cache for shared COS, should improve
-	// it to automatically get L3 cache info
-	res.Schemata[cacheLevel] = []resctrl.CacheCos{resctrl.CacheCos{ID: 0, Mask: "003ff"}, resctrl.CacheCos{ID: 1, Mask: "003ff"}}
-	resctrl.Commit(res, "shared")
-
 	glog.Infof("[cpumanager] starting with %s policy", m.policy.Name())
 	glog.Infof("[cpumanager] reconciling every %v", m.reconcilePeriod)
 
@@ -206,31 +197,16 @@ func (m *manager) AddContainer(p *v1.Pod, c *v1.Container, containerID string) e
 	return nil
 }
 
-func (m *manager) UpdateContainer(pod *v1.Pod, containerID string) error {
-	var (
-		cmdOut []byte
-		err error
-	)
-	cmdName := "docker"
-	cmdArgs := []string{"inspect", "--format={{.State.Pid}}", containerID}
-	if cmdOut, err = exec.Command(cmdName, cmdArgs...).Output(); err != nil {
-		glog.Errorf("There was an error running docker inspect command: %v", err)
+func (m *manager) UpdateContainer(p *v1.Pod, c *v1.Container, containerID string) error {
+
+	m.Lock()
+	err := m.policy.UpdateContainer(m.state, p, c, containerID)
+	if err != nil {
+		glog.Errorf("[cpumanager] UpdateContainer error: %v", err)
+		m.Unlock()
 		return err
 	}
-	processID := string(cmdOut)
-
-	cacheCOS := getCacheCOS(pod)
-	// Skip container of k8s system, keep them in root cache COS
-	if cacheCOS == "" {
-		glog.V(1).Infof("[cpumanager] Skip update cache for container %s in namespace %s", containerID, pod.Namespace)
-		return nil
-	}
-	// After get processID, do cache allocation action here for this process
-	res := resctrl.NewResAssociation()
-	res.Tasks = append(res.Tasks, processID)
-	glog.V(1).Infof("[cpumanager] Add container %s process %s to cache %s COS", containerID, processID, cacheCOS)
-	resctrl.Commit(res, cacheCOS)
-
+	m.Unlock()
 	return nil
 }
 
