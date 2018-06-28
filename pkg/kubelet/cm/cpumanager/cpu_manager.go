@@ -99,12 +99,14 @@ type manager struct {
 	nodeAllocatableReservation v1.ResourceList
 
 	llcSharedPercentage int32
+
+	llcBenchPercentage int32
 }
 
 var _ Manager = &manager{}
 
 // NewManager creates new cpu manager based on provided policy
-func NewManager(cpuPolicyName string, reconcilePeriod time.Duration, machineInfo *cadvisorapi.MachineInfo, nodeAllocatableReservation v1.ResourceList, stateFileDirecory string, cpuLLCPolicyName string, llcSharedPercentage int32) (Manager, error) {
+func NewManager(cpuPolicyName string, reconcilePeriod time.Duration, machineInfo *cadvisorapi.MachineInfo, nodeAllocatableReservation v1.ResourceList, stateFileDirecory string, cpuLLCPolicyName string, llcSharedPercentage int32, llcBenchPercentage int32) (Manager, error) {
 	var policy Policy
 
 	switch policyName(cpuPolicyName) {
@@ -136,7 +138,7 @@ func NewManager(cpuPolicyName string, reconcilePeriod time.Duration, machineInfo
 		// exclusively allocated.
 		reservedCPUsFloat := float64(reservedCPUs.MilliValue()) / 1000
 		numReservedCPUs := int(math.Ceil(reservedCPUsFloat))
-		policy = NewStaticPolicy(topo, numReservedCPUs, llcSharedPercentage)
+		policy = NewStaticPolicy(topo, numReservedCPUs, llcSharedPercentage, llcBenchPercentage)
 
 	default:
 		glog.Errorf("[cpumanager] Unknown policy \"%s\", falling back to default policy \"%s\"", cpuPolicyName, PolicyNone)
@@ -154,6 +156,7 @@ func NewManager(cpuPolicyName string, reconcilePeriod time.Duration, machineInfo
 		machineInfo:                machineInfo,
 		nodeAllocatableReservation: nodeAllocatableReservation,
 		llcSharedPercentage:        llcSharedPercentage,
+		llcBenchPercentage:		    llcBenchPercentage,
 	}
 	return manager, nil
 }

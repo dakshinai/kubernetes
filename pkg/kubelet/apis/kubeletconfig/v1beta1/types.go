@@ -259,6 +259,11 @@ type KubeletConfiguration struct {
 	// Default: "50%"
 	// +optional
 	CPUManagerLLCSharedPercentage int32 `json:"cpuManagerLLCSharedPercentage,omitempty"`
+	// CPUManagerLLCBenchPercentage represents the share of LLC that will be used for benchmarking CPUManagerLLC.
+	// Requires the CPUManager feature gate to be enabled.
+	// Default: "20%"
+	// +optional
+	CPUManagerLLCBenchPercentage int32 `json:"cpuManagerLLCBenchPercentage,omitempty"`
 	// runtimeRequestTimeout is the timeout for all runtime requests except long running
 	// requests - pull, logs, exec and attach.
 	// Default: "2m"

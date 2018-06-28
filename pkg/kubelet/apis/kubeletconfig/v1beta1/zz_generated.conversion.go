@@ -202,6 +202,7 @@ func autoConvert_v1beta1_KubeletConfiguration_To_kubeletconfig_KubeletConfigurat
 	out.CPUManagerReconcilePeriod = in.CPUManagerReconcilePeriod
 	out.CPUManagerLLCPolicy = in.CPUManagerLLCPolicy
 	out.CPUManagerLLCSharedPercentage = in.CPUManagerLLCSharedPercentage
+	out.CPUManagerLLCBenchPercentage = in.CPUManagerLLCBenchPercentage
 	out.RuntimeRequestTimeout = in.RuntimeRequestTimeout
 	out.HairpinMode = in.HairpinMode
 	out.MaxPods = in.MaxPods
@@ -325,6 +326,7 @@ func autoConvert_kubeletconfig_KubeletConfiguration_To_v1beta1_KubeletConfigurat
 	out.CPUManagerReconcilePeriod = in.CPUManagerReconcilePeriod
 	out.CPUManagerLLCPolicy = in.CPUManagerLLCPolicy
 	out.CPUManagerLLCSharedPercentage = in.CPUManagerLLCSharedPercentage
+	out.CPUManagerLLCBenchPercentage = in.CPUManagerLLCBenchPercentage
 	out.RuntimeRequestTimeout = in.RuntimeRequestTimeout
 	out.HairpinMode = in.HairpinMode
 	out.MaxPods = in.MaxPods

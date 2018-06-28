@@ -18,7 +18,6 @@ package cpumanager
 
 import (
 	"fmt"
-	"math"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -27,10 +26,11 @@ import (
 	"k8s.io/api/core/v1"
 	v1qos "k8s.io/kubernetes/pkg/apis/core/v1/helper/qos"
 	"k8s.io/kubernetes/pkg/kubelet/cm/cpumanager/resctrl"
-	"k8s.io/kubernetes/pkg/kubelet/cm/cpumanager/resctrl/bitmap"
 	"k8s.io/kubernetes/pkg/kubelet/cm/cpumanager/state"
 	"k8s.io/kubernetes/pkg/kubelet/cm/cpumanager/topology"
 	"k8s.io/kubernetes/pkg/kubelet/cm/cpuset"
+	"k8s.io/kubernetes/pkg/kubelet/cm/cpumanager/resctrl/bitmap"
+	"math"
 )
 
 // PolicyStatic is the name of the static policy
@@ -83,6 +83,8 @@ type staticPolicy struct {
 	reserved cpuset.CPUSet
 	// percentage of LLC to be shared with containers that have burstable or best-effort SLA
 	llcSharedPercentage int32
+	// percentage of LLC to be used for benchmarking
+	llcBenchPercentage int32
 }
 
 // Ensure staticPolicy implements Policy interface
@@ -91,7 +93,7 @@ var _ Policy = &staticPolicy{}
 // NewStaticPolicy returns a CPU manager policy that does not change CPU
 // assignments for exclusively pinned guaranteed containers after the main
 // container process starts.
-func NewStaticPolicy(topology *topology.CPUTopology, numReservedCPUs int, llcSharedPercentage int32) Policy {
+func NewStaticPolicy(topology *topology.CPUTopology, numReservedCPUs int, llcSharedPercentage int32, llcBenchPercentage int32) Policy {
 	allCPUs := topology.CPUDetails.CPUs()
 	// takeByTopology allocates CPUs associated with low-numbered cores from
 	// allCPUs.
@@ -110,6 +112,7 @@ func NewStaticPolicy(topology *topology.CPUTopology, numReservedCPUs int, llcSha
 		topology:            topology,
 		reserved:            reserved,
 		llcSharedPercentage: llcSharedPercentage,
+		llcBenchPercentage:  llcBenchPercentage,
 	}
 }
 
@@ -147,14 +150,16 @@ func (p *staticPolicy) validateLLCParams() error {
 }
 func (p *staticPolicy) setupLLC() error {
 
-	glog.V(1).Infof("[cpumanager] creating 100 percent guaranteed and %v percent shared Cache CoS", p.llcSharedPercentage)
+	glog.V(1).Infof("[cpumanager] creating %v percent guaranteed and %v percent shared Cache CoS", p.llcBenchPercentage, p.llcSharedPercentage)
 
-	// Guaranteed CoS defaults to entire LLC
-	res := resctrl.NewResAssociation()
-	err := resctrl.Commit(res, "guaranteed")
-	if err != nil {
-		return fmt.Errorf("commit failed for guaranteed Cache CoS: %s", err.Error())
-	}
+	commitLLC("guaranteed", p.llcBenchPercentage)
+
+	commitLLC("shared", p.llcSharedPercentage)
+
+	return nil
+}
+
+func commitLLC(groupName string, llcPercentage int32) error {
 
 	// Get LLC level
 	level := resctrl.GetLLC()
@@ -164,19 +169,19 @@ func (p *staticPolicy) setupLLC() error {
 		return fmt.Errorf("unable to fetch CAT info")
 	}
 
-	// Determine number of cache ways in shared Cache CoS
+	// Determine number of cache ways
 	cbmMask := resctrl.GetRdtCosInfo()[strings.ToLower(cacheLevel)].CbmMask
 	maskLen := bitmap.CbmLen(cbmMask)
-	sharedWays := math.Floor(float64(p.llcSharedPercentage) / float64(100) * float64(maskLen))
-	glog.V(1).Infof("[cpumanager] shared ways %f", sharedWays)
+	sharedWays := math.Floor(float64(llcPercentage) / float64(100) * float64(maskLen))
+	glog.V(1).Infof("[cpumanager] shared ways %f for shared %v percentage in %s group", sharedWays, llcPercentage, groupName)
 
 	b, err := bitmap.NewBitmap(maskLen, cbmMask)
 	if err != nil {
-		return fmt.Errorf("CAT bitmask generation failed: %s", err.Error())
+		return fmt.Errorf("CAT bitmask generation failed: %s for %s group", err.Error(), groupName)
 	}
 
 	r := b.GetConnectiveBits(uint32(sharedWays), 0, true)
-	glog.V(1).Infof("[cpumanager] shared COS bitmask %s", r.ToString())
+	glog.V(1).Infof("[cpumanager] shared COS bitmask %s for shared %v percentage in %s group", r.ToString(), llcPercentage, groupName)
 
 	// Determine number of available LLC
 	num, err := resctrl.GetNumberOfCaches(int(level))
@@ -184,19 +189,21 @@ func (p *staticPolicy) setupLLC() error {
 		return fmt.Errorf("unable to fetch CPU cache info: %s", err.Error())
 	}
 
+	res := resctrl.NewResAssociation()
+
 	res.Schemata[cacheLevel] = make([]resctrl.CacheCos, num)
 	for i := 0; i < num; i++ {
 		res.Schemata[cacheLevel][i] = resctrl.CacheCos{ID: uint8(i), Mask: r.ToString()}
 	}
 
-	err = resctrl.Commit(res, "shared")
+	err = resctrl.Commit(res, groupName)
 	if err != nil {
-		return fmt.Errorf("commit failed for shared Cache CoS: %s", err.Error())
+		return fmt.Errorf("commit failed for %s Cache CoS: %s", groupName, err.Error())
 	}
+
 
 	return nil
 }
-
 func (p *staticPolicy) validateState(s state.State) error {
 	tmpAssignments := s.GetCPUAssignments()
 	tmpDefaultCPUset := s.GetDefaultCPUSet()

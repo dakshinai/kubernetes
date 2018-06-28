@@ -138,6 +138,9 @@ func SetDefaults_KubeletConfiguration(obj *KubeletConfiguration) {
 	if obj.CPUManagerLLCSharedPercentage == 0 {
 		obj.CPUManagerLLCSharedPercentage = 50
 	}
+	if obj.CPUManagerLLCBenchPercentage == 0 {
+		obj.CPUManagerLLCBenchPercentage = 20
+	}
 	if obj.RuntimeRequestTimeout == zeroDuration {
 		obj.RuntimeRequestTimeout = metav1.Duration{Duration: 2 * time.Minute}
 	}

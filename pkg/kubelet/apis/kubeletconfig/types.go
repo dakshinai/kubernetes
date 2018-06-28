@@ -166,6 +166,9 @@ type KubeletConfiguration struct {
 	// CPUManagerLLCSharedPercentage represents the share of LLC, non-guaranteed containers occupy.
 	// Requires the CPUManager feature gate to be enabled.
 	CPUManagerLLCSharedPercentage int32
+	// CPUManagerLLCBenchPercentage represents the share of LLC that will be used for benchmarking CPUManagerLLC.
+	// Requires the CPUManager feature gate to be enabled.
+	CPUManagerLLCBenchPercentage int32
 	// runtimeRequestTimeout is the timeout for all runtime requests except long running
 	// requests - pull, logs, exec and attach.
 	RuntimeRequestTimeout metav1.Duration

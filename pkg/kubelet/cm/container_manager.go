@@ -112,6 +112,7 @@ type NodeConfig struct {
 	ExperimentalCPUManagerReconcilePeriod     time.Duration
 	ExperimentalCPUManagerLLCPolicy           string
 	ExperimentalCPUManagerLLCSharedPercentage int32
+	ExperimentalCPUManagerLLCBenchPercentage  int32
 	ExperimentalPodPidsLimit                  int64
 	EnforceCPULimits                          bool
 }

@@ -65,6 +65,7 @@ func Funcs(codecs runtimeserializer.CodecFactory) []interface{} {
 			obj.CPUManagerReconcilePeriod = obj.NodeStatusUpdateFrequency
 			obj.CPUManagerLLCPolicy = "none"
 			obj.CPUManagerLLCSharedPercentage = 50
+			obj.CPUManagerLLCBenchPercentage = 20
 			obj.OOMScoreAdj = int32(qos.KubeletOOMScoreAdj)
 			obj.Port = ports.KubeletPort
 			obj.ReadOnlyPort = ports.KubeletReadOnlyPort

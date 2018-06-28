@@ -521,6 +521,7 @@ func AddKubeletConfigFlags(mainfs *pflag.FlagSet, c *kubeletconfig.KubeletConfig
 	fs.DurationVar(&c.CPUManagerReconcilePeriod.Duration, "cpu-manager-reconcile-period", c.CPUManagerReconcilePeriod.Duration, "<Warning: Alpha feature> CPU Manager reconciliation period. Examples: '10s', or '1m'. If not supplied, defaults to `NodeStatusUpdateFrequency`")
 	fs.StringVar(&c.CPUManagerLLCPolicy, "cpu-manager-llc-policy", c.CPUManagerLLCPolicy, "<Warning: Alpha feature> CPU Manager LLC policy to use. Possible values: 'none', 'static'. Default: 'none'")
 	fs.Int32Var(&c.CPUManagerLLCSharedPercentage, "cpu-manager-llc-shared-percentage", c.CPUManagerLLCSharedPercentage, "share of LLC occupied by non-guaranteed containers.")
+	fs.Int32Var(&c.CPUManagerLLCBenchPercentage, "cpu-manager-llc-bench-percentage", c.CPUManagerLLCBenchPercentage, "share of LLC used for benchmarking.")
 	fs.DurationVar(&c.RuntimeRequestTimeout.Duration, "runtime-request-timeout", c.RuntimeRequestTimeout.Duration, "Timeout of all runtime requests except long running request - pull, logs, exec and attach. When timeout exceeded, kubelet will cancel the request, throw out an error and retry later.")
 	fs.StringVar(&c.HairpinMode, "hairpin-mode", c.HairpinMode, "How should the kubelet setup hairpin NAT. This allows endpoints of a Service to loadbalance back to themselves if they should try to access their own Service. Valid values are \"promiscuous-bridge\", \"hairpin-veth\" and \"none\".")
 	fs.Int32Var(&c.MaxPods, "max-pods", c.MaxPods, "Number of Pods that can run on this Kubelet.")

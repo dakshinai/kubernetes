@@ -149,6 +149,7 @@ var (
 		"CPUManagerReconcilePeriod.Duration",
 		"CPUManagerLLCPolicy",
 		"CPUManagerLLCSharedPercentage",
+		"CPUManagerLLCBenchPercentage",
 		"CgroupDriver",
 		"CgroupRoot",
 		"CgroupsPerQOS",
